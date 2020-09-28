@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+
+{% block title %}Cart | {% endblock %}
+
+{% block content %}
+<div id="cart_app">
+    <h3 class="title">Cart</h3>
+
+    {% if cart %}
+    <div v-if="products.length > 0">
+    <div class="table">
+        <table class="table">
+            <thead>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th></th>
+            </thead>
+
+            <tbody>
+                <tr v-for="product in products">
+                    <td>[[ product.title ]]</td>
+                    <td> <button @click="decrementQuantity(product.id, product.quantity, product.price)">- </button> [[ product.quantity ]]  <button @click="incrementQuantity(product.id, product.quantity, product.price)">+ </button> </td>
+                    <td>$[[ product.total_price ]]</td>
+                    <td><button @click="removeFromCart(product.id)">Remove from cart</button></td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <td>Total :</td>
+                <td></td>
+                <td> $[[ totalCost ]]</td>
+            </tfoot>
+        </table>
+    </div>
+
+    <form v-on:submit.prevent="submitForm()">
+        <div class="field">
+            <div class="control">
+                First name <input type="text" name="first_name" v-model="first_name"><br>
+                Last name  <input type="text" name="last_name" v-model="last_name"><br>
+                E-mail     <input type="email" name="email" v-model="email"><br>
+                Country    <input type="text" name="country" v-model="country"><br>
+                Address    <input type="text" name="address" v-model="address"><br>
+                Zipcode    <input type="text" name="zipcode" v-model="zipcode"><br>
+            </div>
+        </div>
+        <div class="field">
+            <div class="control">
+                <button class="button is-primary"> Check out</button>
+            </div>
+        </div>
+    </form>
+</div>
+<p v-else> Your cart is empty</p>
+    {% else %}
+    <p> Your cart is empty.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+    var product_app = new Vue({
+        el: '#cart_app',
+        delimiters: ['[[', ']]'],
+        store: store,
+        data() {
+            return {
+                products : [{{ productsstring| safe }}],
+                first_name: '',
+                last_name: '',
+                email:'',
+                country:'',
+                address:'',
+                zipcode: '',
+            }
+        },
+
+        computed: {
+            numItems: function() {
+                return store.state.numItems
+            },
+            totalCost: function() {
+                return store.state.totalCost
+            }
+        },
+
+        methods: {
+
+            submitForm() {
+                console.log('Submit form');
+
+                var data = {
+                    'first_name': this.first_name,
+                    'last_name': this.last_name,
+                    'email': this.email,
+                    'country': this.country,
+                    'address': this.address,
+                    'zipcode': this.zipcode,
+                };
+
+                fetch('/api/checkout/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(data)
+                })
+                .then((response) => {
+                    console.log('Success');
+                    console.log(response);
+
+                    window.location.href='/';
+                })
+                .catch(function (error) {
+                    console.log('Error 2');
+                    console.log(error);
+                })
+            },
+
+            incrementQuantity(product_id, quantity, price) {
+                console.log('Product_id:', product_id);
+
+                var data = {
+                    'product_id': product_id,
+                    'update': true,
+                    'quantity': parseInt(quantity) + 1
+                };
+
+                store.commit('increment', 1);
+                //ci dessus on incremente la variable store du base html qui permet de préciser la quantité d'articles dans le panier visible depuis la navbar
+                store.commit('changeTotalCost', parseFloat(price));
+
+                    fetch('/api/add_to_cart/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(data)
+                })
+                    .then((response) => {
+                        console.log(response);
+                        
+                        for (var i=0; i < this.products.length; i++){
+                            var product = this.products[i];
+
+                            if (product.id === product_id){
+                                this.products[i].quantity = parseInt(this.products[i].quantity) + 1;
+                                this.products[i].total_price = parseInt(this.products[i].price) * parseFloat(this.products[i].quantity);
+                            }
+                        }   
+                    })
+                    .catch(function (error) {
+                        console.log(error);
+                    })
+            },
+            decrementQuantity(product_id, quantity,  price) {
+                console.log('Product_id:', product_id);
+
+                var data = {
+                    'product_id': product_id,
+                    'update': true,
+                    'quantity': parseInt(quantity) -1
+                };
+
+                if (parseInt(quantity) - 1 === 0){
+                    this.removeFromCart(product_id);
+
+                } else {
+                
+                store.commit('increment', -1);
+                //ci dessus on incremente la variable store du base html qui permet de préciser la quantité d'articles dans le panier visible depuis la navbar
+                store.commit('changeTotalCost', -parseFloat(price));
+
+                fetch('/api/add_to_cart/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(data)
+                })
+                    .then((response) => {
+                        console.log(response);
+                        
+                        for (var i=0; i < this.products.length; i++){
+                            var product = this.products[i];
+
+                            if (product.id === product_id){
+                                this.products[i].quantity = parseInt(this.products[i].quantity) - 1;
+                                this.products[i].total_price = parseInt(this.products[i].price) * parseFloat(this.products[i].quantity);
+                            }
+                        }   
+                    })
+                    .catch(function (error) {
+                        console.log(error);
+                    })
+                }
+            },
+
+            removeFromCart(product_id) {
+                console.log('Remove product_id:', product_id);
+
+                var data = {
+                    'product_id': product_id
+                };
+                    
+                fetch('/api/remove_from_cart/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(data)
+                })
+                .then((response) => {
+                    console.log(response)
+
+                    this.products = this.products.filter(product => product.id !== product_id)
+                })
+                .catch(function (error) {
+                    console.log('Error 2');
+                    console.log(error);
+                })
+            }
+
+        }
+    });
+</script>
+
+{% endblock %}
